@@ -133,25 +133,42 @@ merged <- merge(austria, switzerland)
 
 ```
 
+```{r}
+# Plot
+map1 <- tm_shape(austria) + tm_raster(col.legend = tm_legend("Elevation(m)")) + 
+  tm_title(text = "Austria")
+
+
+map2 <- tm_shape(switzerland) + tm_raster(col.legend = tm_legend("Elevation(m)")) + 
+  tm_title(text = "Switzerland")
+
+map3 <- tm_shape(merged) + tm_raster(col.legend = tm_legend("Elevation(m)")) + 
+  tm_title(text = "Merged")
+
+
+tmap_arrange(map1, map2, map3, nrow = 1)
+
+```
+
 ### Inspecting raster objects
 
 We can get info on raster values just by typing the name or using the summary function.
 
 ```{r}
-
+summary(zion_elevation)
 ```
 
 We can get global summaries, such as standard deviation.
 
 ```{r}
-
+global(zion_elevation, sd) # no sample, using whole raster
+st_crs(zion_elevation)
 ```
 
 Or we can use `freq()` to get the counts with categories.
 
 ```{r}
-
-
+freq(zion_land)
 ```
 
 ### Indexing
@@ -159,13 +176,24 @@ Or we can use `freq()` to get the counts with categories.
 We can index rasters using row-column indexing or cell IDs.
 
 ```{r}
+# top to bottom
+zion_elevation[1,1]
 
+# Cell ID 1
+zion_elevation[1]
+
+
+# Cell ID 468
+zion_elevation[468]
+
+zion_elevation$srtm[468]
 
 ```
 
 For multi-layer rasters, subsetting returns the values in both layers.
 
 ```{r}
+
 
 ```
 
