@@ -80,7 +80,7 @@ map1 <- tm_shape(zion_elevation) +
 map2 <- tm_shape(zion_land) + 
   tm_raster(col.legend = tm_legend("Land Cover"))
 
-
+# Only one layer here
 tmap_arrange(map1, map2,nrow =1)
 
 ```
@@ -92,24 +92,26 @@ As an example, we'll load a dataset from `spDataLarge` containing the four bands
 ```{r}
 landsat <- rast(system.file("raster/landsat.tif", package = "spDataLarge"))
 
-```
-
-```{r}
-
+# find out # of layers in a raster object
+nlyr(landsat)
 
 
+#find out layer names
+names(landsat)
 ```
 
 We can subset layers using either the layer number or name:
 
 ```{r}
-
+landsat3 <- subset(landsat,3)
+landsat4 <- subset(landsat, "landsat_4")
 ```
 
 We can combine `SpatRaster` objects into one, using `c()`:
 
 ```{r}
-
+#landsat34 <- subset(landsat, c("landsat_3","landsat_4"))
+landsat34 <- c(landsat3, landsat4)
 ```
 
 ### Merging Rasters
@@ -126,6 +128,8 @@ switzerland <- geodata::elevation_30s(country = "CHE", path = tempdir())
 ```
 
 ```{r}
+# Merge Austria and Switzerland rasters
+merged <- merge(austria, switzerland)
 
 ```
 
