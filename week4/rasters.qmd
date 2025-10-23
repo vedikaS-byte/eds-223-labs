@@ -281,7 +281,8 @@ zion_elevation_clip <- zion_elevation[clip,drop = F]
 ```
 
 ```{r}
-
+tm_shape(zion_elevation) + tm_raster(col.legend = tm_legend(title = "Elevation (m)")) + 
+  tm_title(text = "Original")
  
 ```
 
@@ -294,6 +295,12 @@ Plotting side-by-side, the clipped version appears to take up more space -- does
 -   **Quantitatively:** We can directly check whether the extents match using the `ext()` function!
 
 ```{r}
+# Check for extent matching
+if(ext(zion_elevation) == ext(zion_elevation_clip)){
+  print("Extents match")
+} else{
+    print("Extents do not match")
+}
 
 
 ```
