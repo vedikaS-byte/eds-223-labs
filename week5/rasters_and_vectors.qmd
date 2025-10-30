@@ -241,6 +241,7 @@ library(raster)
 ```{r}
 bryce = raster("week5/Bryce_Canyon_GeoTIFF/Bryce_Canyon.tif")
 
+# Transform spatial data structure into raster
 bryce_mat = raster_to_matrix(bryce)
 
 bryce_small = resize_matrix(bryce_mat,0.25)

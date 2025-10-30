@@ -1,8 +1,8 @@
 # Ignore data
 data/
 
-# Ignore wee5 data
-Bryce_Canyon_GeoTIFF/
+# Ignore week5 data
+week5/Bryce_Canyon_GeoTIFF/
 
 # History files
 .Rhistory
