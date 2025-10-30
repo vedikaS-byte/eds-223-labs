@@ -1,3 +1,9 @@
+# Ignore data
+data/
+
+# Ignore wee5 data
+Bryce_Canyon_GeoTIFF/
+
 # History files
 .Rhistory
 .Rapp.history
