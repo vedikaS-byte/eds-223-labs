@@ -244,6 +244,7 @@ bryce = raster("week5/Bryce_Canyon_GeoTIFF/Bryce_Canyon.tif")
 # Transform spatial data structure into raster
 bryce_mat = raster_to_matrix(bryce)
 
+# Reduce size
 bryce_small = resize_matrix(bryce_mat,0.25)
 ```
 
@@ -252,9 +253,11 @@ bryce_small = resize_matrix(bryce_mat,0.25)
 #### Building Basemaps with Rayshader
 
 ```{r}
-
+# Base map
 bryce_small %>% 
+  # Map colors to elevation values
   height_shade() %>%  
+ # plot map
   plot_map() 
 ```
 
@@ -262,17 +265,17 @@ bryce_small %>%
 
 bryce_small %>% 
   height_shade() %>% 
-  
+  # Adding desert colors
   add_overlay(sphere_shade(bryce_small, texture = "desert", 
                            zscale=4, colorintensity = 5), alphalayer=0.5) %>%
   
-
+  # Add shadows for realistic appearance
   add_shadow(lamb_shade(bryce_small,zscale=6), 0) %>%
   
 
   add_shadow(ambient_shade(bryce_small), 0) %>%
   
-
+  # add texture shading
   add_shadow(texture_shade(bryce_small,detail=8/10,contrast=9,brightness = 11), 0.1) %>%
   plot_map()
 ```
@@ -280,14 +283,14 @@ bryce_small %>%
 
 
 ```{r}
-
+# Establish utm coordinates.. define bounding box coordinates for area of interest (shrink bounding box)
 utm_bbox <- c(xmin = 396367.4, xmax = 397975.2, 
               ymin = 4163747.9, ymax = 4165291.0)
 ```
 
 
 ```{r}
-
+# Create extent object from bounding box coordinates
 extent_zoomed = extent(utm_bbox[1], utm_bbox[2], utm_bbox[3], utm_bbox[4])
 
 bryce_zoom = crop(bryce, extent_zoomed)
