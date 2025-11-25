@@ -9,7 +9,7 @@ format:
   html:
     toc: true
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 ::: {.gray-text .center-text}
@@ -92,8 +92,8 @@ To train our classification algorithm and plot the results, we'll use the `rpart
 
 ```{r}
 #| eval: false
-install.packages("rpart")
-install.packages("rpart.plot")
+# install.packages("rpart")
+# install.packages("rpart.plot")
 ```
 
 Let's load all necessary packages:
@@ -127,7 +127,11 @@ filelist <- list.files(here::here("week8","data", "landsat-data"), full.names = 
 # read in and store as a raster stack
 landsat <- rast(filelist)
 
+# update layer names to match bands 
+names(landsat) <- c("blue", "green", "red", "NIR", "SWIR1", "SWIR2")
 
+# plot 
+plotRGB(landsat, r = 3, g = 2, b = 1, stretch = "lin") # stretch raster linearly (0-255)
 
 ```
 
@@ -137,8 +141,9 @@ We want to constrain our analysis to the southern portion of the county where we
 
 ```{r}
 # read in shapefile for southern portion of SB county
-SB_county_south <- st_read(here::here("week8","data", "SB_county_south.shp")) %>%
-      st_transform(SB_county_south, crs = crs(landsat))
+SB_county_south <- st_read(here::here("week8","data", "SB_county_south.shp")) 
+#%>%
+SB_county_south <-  SB_county_south %>% st_transform(crs = crs(landsat))
 ```
 
 ```{r}
@@ -155,6 +160,18 @@ Now, we can crop and mask the Landsat data to our study area.
 -   **Bonus**: We can also remove any objects we're no longer working with to save space
 
 ```{r include=TRUE}
+# crop landsat scene to extent of SB county
+landsat_crop <- crop(landsat, SB_county_south) 
+
+# mask raster to southern portion of SB county 
+# some values still exist as NA, so need to get rid of 
+landsat_mask <- mask(landsat_crop, SB_county_south)
+
+# remove unneccasry objects from environment
+rm(landsat, SB_county_south, landsat_crop) # no longer need
+
+# plot to ensure mask has dropped na values
+plotRGB(landsat_mask, r = 3, g = 2, b = 1, stretch = "lin")
 
 ```
 
@@ -174,6 +191,19 @@ Let's reclassify any erroneous values as `NA` and update the values for each pix
 
 ```{r include=TRUE, warning=FALSE}
 
+# Reclassify for potentially erroneous values as NA
+rcl <- matrix(c(-Inf, 7272, NA,
+                43637, Inf, NA), ncol = 3, byrow = T)
+
+#reclassify 
+landsat <- classify(landsat_mask, rcl = rcl)
+
+# adjust values by scaling factor
+landsat <- (landsat*.000275-.2) *100
+
+# check that valyes are 0-100
+summary(landsat)
+
 ```
 
 # Supervised Classification
@@ -186,13 +216,30 @@ We will load the shapefile identifying locations within our study area as contai
 
 ```{r}
 # read in and transform training data
-training_data <- st_read(here::here( "data", "trainingdata.shp")) %>%
+training_data <- st_read(here::here( "week8", "data", "trainingdata.shp")) %>%
   st_transform(., crs = crs(landsat))
+
+# just to see what it looks like
+tm_shape(training_data) +tm_polygons(fill ="type")
 ```
 
 Now, we can extract the spectral reflectance values at each site to create a data frame that relates land cover types to their spectral reflectance.
 
 ```{r}
+## Find the cells within all type polygons that we have data for
+
+# extract pixel values from landsat raster at the locations in the training data 
+training_data_values <- terra::extract(landsat, training_data, df = T) 
+
+# convert training data to data frame (no geom)
+training_data_attributes <- training_data %>% st_drop_geometry()
+
+# join training data attributes (description of classification) and training data extracted values
+sb_training_data <- left_join(training_data_values, training_data_attributes, 
+                              by = c("ID"="id")) %>% mutate(type = as.factor(type)) # convert landcover type to factor
+
+# double check type
+str(sb_training_data)
 
 ```
 
@@ -206,6 +253,13 @@ To train our decision tree, we first need to establish our model formula (i.e. w
 -   We also set `na.action = na.omit` to remove any pixels with `NA`s from the analysis.
 
 ```{r include=TRUE}
+# now have the training data... classifier (decision tree) will use this 
+# establish formula
+sb_formula <- type ~ red+ green+ blue + NIR + SWIR1 + SWIR2
+
+# make classifier
+sb_decisiontree <- rpart(formula = type ~ red+ green+ blue + NIR + SWIR1 + SWIR2, data = sb_training_data, 
+                         method = "class", na.action = na.omit)
 
 ```
 
@@ -218,6 +272,8 @@ To understand how our decision tree will classify pixels, we can plot the result
 :::
 
 ```{r}
+# plot tree
+prp(sb_decisiontree)
 
 ```
 
@@ -228,6 +284,15 @@ Now that we have a rule set for classifying spectral reflectance values into lan
 The `terra` package includes a `predict()` function that allows us to apply a model to our data. In order for this to work properly, the names of the layers need to match the column names of the predictors we used to train our decision tree. The `predict()` function will return a raster layer with integer values. These integer values correspond to the *factor levels* in the training data. To figure out what category each integer corresponds to, we can inspect the levels of our training data.
 
 ```{r}
+## what would landsat look like if it uses every pixel from tree?
+
+# use predict()
+sb_classification_dt <- terra::predict(landsat, sb_decisiontree, 
+                                   type = "class", na.rm = T)
+
+
+# inspect levels of training data to understand order of classes
+levels(sb_training_data$type)
 
 ```
 
@@ -236,7 +301,20 @@ The `terra` package includes a `predict()` function that allows us to apply a mo
 Now we can plot the results and check out our land cover map!
 
 ```{r}
+# plot results
+dt_plot <- tm_shape(sb_classification_dt) + tm_raster(
+  col.scale = tm_scale(
+  values = c("#8DB580", "#F2DDA4", "#7E8987", "#6A8EAE"),
+      labels = c("green vegetation", "soil/dead grass", "urban", "water")
+  ) , col.legend = tm_legend("Landcover Type")) + 
+  tm_title(text = "Decision Tree Landcover Classification") + 
+  tm_layout(legend.position = c("left", "bottom"))
 
+dt_plot
+
+
+# now for every cell in raster, we have information on predicted values per type 
+# look at training data, so look at first observation then classifying baaed on percentages in blue, green, red, etc. columns
 
 ```
 
@@ -251,7 +329,27 @@ We already processed our landsat data by cropping/masking to our area of interes
 The first step is to prepare our data for k-means clustering. Unlike the decision tree which can work directly with raster objects, k-means requires our data to be in a dataframe format. We'll extract the spectral band values for each pixel and then **scale** them. Scaling is critical for k-means because the algorithm measures distances between pixels - if one band has much larger values than another, it would dominate the clustering. Scaling puts all bands on the same scale so each contributes equally.
 
 ```{r}
+# # convert raster to data frame and scale it 
+# landsat_df <- as.data.frame(landsat, xy = T)
+# 
+# # extract spectral bands for clustering
+# spectral_data <- landsat_df[,c("blue", "green", "red", "NIR", "SWIR1", "SWIR2")]
+# #is.na(spectral_data)
 
+# distance based algorithm (euclidian distance from point to center) 
+# must scale with different variables that have different units
+# scale to make sure distance part is not affected
+spectral_scale <- scale(spectral_data) # we only have cells that have their reflectance value
+
+  # Convert raster to dataframe
+landsat_df <- as.data.frame(landsat, xy = TRUE, na.rm = TRUE)
+
+# Extract spectral bands for clustering
+spectral_data <- landsat_df[, c("blue", "green", "red", "NIR", "SWIR1", "SWIR2")]
+
+# Scale the data
+spectral_data_scaled <- scale(spectral_data)
+  
 ```
 
 ## 2. Classify using K means algorithm
@@ -261,6 +359,13 @@ Now we're ready to run the k-means algorithm! We specify `centers = 4` because w
 Unlike the decision tree, **k-means has no idea what "water" or "green vegetation" looks like** - it's just finding natural groupings in the spectral data!
 
 ```{r}
+set.seed(223) # for reproducibility 
+
+# perform k means = 4 (classify with 4 group "types")
+kmeans_result <- kmeans(spectral_data_scaled, centers = 4, nstart = 25)
+
+# Add cluster assignments to data frame
+landsat_df$cluster <- kmeans_result$cluster
 
 ```
 
@@ -269,8 +374,16 @@ Unlike the decision tree, **k-means has no idea what "water" or "green vegetatio
 The k-means algorithm has now assigned each pixel to one of 4 clusters (numbered 1-4). To visualize our results on a map, we need to convert these cluster assignments back into a raster format. We'll create an empty raster with the same dimensions as our original Landsat data, then fill it with the cluster numbers.
 
 ```{r}
-
-
+# Convert back to raster
+SB_classification_kmeans <- rast(landsat[[1]])
+  
+values(SB_classification_kmeans) <- NA
+  
+cells <- cellFromXY(SB_classification_kmeans, landsat_df[, c("x", "y")])
+  
+values(SB_classification_kmeans)[cells] <- landsat_df$cluster # only look at cells that have lat and long (x and y)
+  
+  
 ```
 
 ## 4. Figure out what our clusters represent!
@@ -285,7 +398,21 @@ We'll calculate the mean reflectance values for each band within each cluster. B
 -   **Moderate values** → likely urban areas
 
 ```{r}
-
+landsat_df %>% group_by(cluster) %>% 
+  summarize(blue = mean(blue), 
+  green = mean(green), 
+  red = mean(red), 
+  NIR = mean(NIR), 
+  SWIR1 = mean(SWIR), 
+  SWIR2 = mean(SWIR2)) %>% arrange(cluster) %>% 
+  knitr::kable(digits = 2)
+  
+ # library(knitr)
+  
+  levels(SB_classification_kmeans) <- data.frame(
+  ID = 1:4, 
+  landcover = c("soil/dead grass", "urban", "green vegetation", "water" )
+  )
 
 ```
 
@@ -294,7 +421,19 @@ We'll calculate the mean reflectance values for each band within each cluster. B
 Now we can plot the results and check out our land cover map!
 
 ```{r}
+# plot results
+kmeans_plot <- tm_shape(SB_classification_kmeans) +
+  tm_raster(
+    col.scale = tm_scale(
+      values = c("#F2DDA4","#7E8987",  "#8DB580","#6A8EAE"),
+      labels = c("soil/dead grass", "urban", "green vegetation", "water")
+    ),
+    col.legend = tm_legend("Landcover type")
+  ) +
+  tm_title(text = "K- Means Landcover Classification") + 
+  tm_layout(legend.position = c("left", "bottom"))
 
+kmeans_plot
 ```
 
 ## 6. Compare our decision tree and kmeans algorithm classification

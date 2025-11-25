@@ -1,0 +1,54 @@
+---
+title: "week8 lab"
+format: html
+---
+
+```{r}library(terra)}
+library(sf)
+library(tidyverse)
+library(here)
+library(tmap)
+```
+
+## Create function for NDVI
+
+```{r}
+ndvi_fun <- function(nir, red){
+  (nir - red) / (nir + red)
+}
+```
+
+## **3. Write pseudo code**
+
+Let’s first sketch out what operations we want to perform so we can figure out what our function needs. Before diving into the detailed nuances of your function, it’s helpful to start by outlining the major steps you want your function to perform using pseudo-code.
+
+```{r}
+library(terra)
+# load in stacked raster
+landsat_files <- list.files(path="week8/", # File path
+                        pattern = ".tif", # File names matching pattern
+                        full.names = TRUE) # Reference entire file names matching                                             this pattern
+# removie .aux.xml
+landsat_files <- landsat_files[-5]
+# stack raster 
+landsat <- rast(landsat_files)
+
+# rename bands
+
+
+
+
+
+```
+
+Now that we’ve written out the pseudo-code, we need to ask ourselves what argument(s) we would need to pass into our function to set off the process. In this case, the first operation needs a file name to read in. So, we now we need to figure out a way to come up with a set of file names to iterate through.
+
+## **4. Obtain list of Landsat scenes for NDVI function**
+
+We want a list of the scenes so that we can tell our function to compute NDVI for each. To do that we look in our data folder for the relevant file. To do so, we want to do the following:
+
+-   Ask for the names of all the files in the `data` folder
+
+-   Set the `pattern` option to return the names that end in `.tif` (the file extension for the Landsat scenes)
+
+-   Set the `full.names` option returns the full file path for each scene
